@@ -44,7 +44,8 @@ public class LuceneFieldMapper extends KNNVectorFieldMapper {
         Map<String, String> metaValue,
         KNNMethodConfigContext knnMethodConfigContext,
         CreateLuceneFieldMapperInput createLuceneFieldMapperInput,
-        OriginalMappingParameters originalMappingParameters
+        OriginalMappingParameters originalMappingParameters,
+        Version indexCreatedVersion
     ) {
         final KNNVectorFieldType mappedFieldType = new KNNVectorFieldType(
             fullname,
@@ -75,7 +76,8 @@ public class LuceneFieldMapper extends KNNVectorFieldMapper {
                 public Version getIndexCreatedVersion() {
                     return knnMethodConfigContext.getVersionCreated();
                 }
-            }
+            },
+            indexCreatedVersion
         );
 
         return new LuceneFieldMapper(mappedFieldType, createLuceneFieldMapperInput, knnMethodConfigContext, originalMappingParameters);

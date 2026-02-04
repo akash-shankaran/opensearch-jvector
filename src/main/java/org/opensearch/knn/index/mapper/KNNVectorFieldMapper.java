@@ -273,7 +273,8 @@ public abstract class KNNVectorFieldMapper extends ParametrizedFieldMapper {
                     metaValue,
                     knnMethodConfigContext,
                     createLuceneFieldMapperInput,
-                    originalParameters
+                    originalParameters,
+                    indexCreatedVersion
                 );
             }
 
@@ -287,7 +288,8 @@ public abstract class KNNVectorFieldMapper extends ParametrizedFieldMapper {
                 ignoreMalformed,
                 stored.getValue(),
                 hasDocValues.get(),
-                originalParameters
+                originalParameters,
+                indexCreatedVersion
             );
         }
 
@@ -386,13 +388,17 @@ public abstract class KNNVectorFieldMapper extends ParametrizedFieldMapper {
         }
 
         private void validateFromFlat(Builder builder) {
+            if (builder.knnMethodContext.get() != null) {
+                throw new IllegalArgumentException("Cannot set method parameters when index.knn setting is false");
+            }
             validateDimensionSet(builder);
             validateCompressionAndModeNotSet(builder, builder.name(), "flat");
         }
 
         private void validateFromKNNMethod(Builder builder) {
             ValidationException validationException;
-            if (builder.originalParameters.getResolvedKnnMethodContext().isTrainingRequired()) {
+            if (builder.originalParameters.getResolvedKnnMethodContext() != null
+                && builder.originalParameters.getResolvedKnnMethodContext().isTrainingRequired()) {
                 validationException = new ValidationException();
                 validationException.addValidationError(String.format(Locale.ROOT, "\"%s\" requires training.", KNN_METHOD));
                 throw validationException;
@@ -497,11 +503,11 @@ public abstract class KNNVectorFieldMapper extends ParametrizedFieldMapper {
     // values of KNN engine Algorithms hyperparameters.
     protected Version indexCreatedVersion;
     protected Explicit<Boolean> ignoreMalformed;
-    protected Boolean isDerivedSourceEnabled;
     protected boolean stored;
     protected boolean hasDocValues;
     protected VectorDataType vectorDataType;
     protected boolean useLuceneBasedVectorField;
+    protected Boolean isDerivedSourceEnabled;
 
     // We need to ensure that the original KNNMethodContext as parsed is stored to initialize the
     // Builder for serialization. So, we need to store it here. This is mainly to ensure that the legacy field mapper

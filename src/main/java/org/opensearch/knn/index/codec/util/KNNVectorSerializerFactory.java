@@ -20,8 +20,6 @@ import static org.opensearch.knn.index.codec.util.SerializationMode.COLLECTION_O
  */
 public class KNNVectorSerializerFactory {
     private static Map<SerializationMode, KNNVectorSerializer> VECTOR_SERIALIZER_BY_TYPE = ImmutableMap.of(
-        ARRAY,
-        new KNNVectorAsArraySerializer(),
         COLLECTION_OF_FLOATS,
         new KNNVectorAsCollectionOfFloatsSerializer()
     );

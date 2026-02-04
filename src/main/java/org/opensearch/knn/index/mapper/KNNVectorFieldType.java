@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.FieldExistsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
+import org.opensearch.Version;
 import org.opensearch.index.fielddata.IndexFieldData;
 import org.opensearch.index.mapper.MappedFieldType;
 import org.opensearch.index.mapper.ArraySourceValueFetcher;
@@ -42,6 +43,27 @@ public class KNNVectorFieldType extends MappedFieldType {
     private static final Logger logger = LogManager.getLogger(KNNVectorFieldType.class);
     KNNMappingConfig knnMappingConfig;
     VectorDataType vectorDataType;
+    Version indexCreatedVersion;
+
+    /**
+     * Constructor for KNNVectorFieldType with index created version.
+     *
+     * @param name name of the field
+     * @param metadata metadata of the field
+     * @param vectorDataType data type of the vector
+     * @param annConfig configuration context for the ANN index
+     * @param indexCreatedVersion Index created version.
+     */
+    public KNNVectorFieldType(
+            String name,
+            Map<String, String> metadata,
+            VectorDataType vectorDataType,
+            KNNMappingConfig annConfig,
+            Version indexCreatedVersion
+    ) {
+        this(name, metadata, vectorDataType, annConfig);
+        this.indexCreatedVersion = indexCreatedVersion;
+    }
 
     /**
      * Constructor for KNNVectorFieldType.
@@ -51,10 +73,10 @@ public class KNNVectorFieldType extends MappedFieldType {
      * @param vectorDataType data type of the vector
      * @param annConfig configuration context for the ANN index
      */
-    public KNNVectorFieldType(String name, Map<String, String> metadata, VectorDataType vectorDataType, KNNMappingConfig annConfig) {
+    public KNNVectorFieldType(String name, Map<String, String> metadata, VectorDataType vectorDataType, KNNMappingConfig knnConfig) {
         super(name, false, false, true, TextSearchInfo.NONE, metadata);
         this.vectorDataType = vectorDataType;
-        this.knnMappingConfig = annConfig;
+        this.knnMappingConfig = knnConfig;
     }
 
     @Override

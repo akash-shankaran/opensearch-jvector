@@ -23,6 +23,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.knn.index.KNNSettings;
 import org.opensearch.knn.index.SpaceType;
 import org.opensearch.knn.index.VectorDataType;
+import org.opensearch.knn.index.codec.util.KNNVectorAsCollectionOfFloatsSerializer;
 import org.opensearch.knn.index.codec.util.KNNVectorSerializerFactory;
 import org.opensearch.knn.index.engine.KNNEngine;
 import org.opensearch.knn.index.engine.KNNMethodContext;
@@ -76,7 +77,7 @@ public class KNNVectorFieldMapperUtil {
      * @param vector vector to be added to stored field
      */
     public static StoredField createStoredFieldForFloatVector(String name, float[] vector) {
-        return new StoredField(name, KNNVectorSerializerFactory.getDefaultSerializer().floatToByteArray(vector));
+        return new StoredField(name, KNNVectorAsCollectionOfFloatsSerializer.INSTANCE.floatToByteArray(vector));
     }
 
     /**
@@ -85,10 +86,10 @@ public class KNNVectorFieldMapperUtil {
      * @return either int[] or float[] of corresponding vector
      */
     public static Object deserializeStoredVector(BytesRef storedVector, VectorDataType vectorDataType) {
-        if (VectorDataType.BYTE == vectorDataType) {
+        if (VectorDataType.BYTE == vectorDataType || VectorDataType.BINARY == vectorDataType) {
             byte[] bytes = storedVector.bytes;
-            int[] byteAsIntArray = new int[bytes.length];
-            Arrays.setAll(byteAsIntArray, i -> bytes[i]);
+            int[] byteAsIntArray = new int[storedVector.length];
+            Arrays.setAll(byteAsIntArray, i -> bytes[i + storedVector.offset]);
             return byteAsIntArray;
         }
 

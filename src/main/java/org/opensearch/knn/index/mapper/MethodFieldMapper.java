@@ -51,9 +51,8 @@ public class MethodFieldMapper extends KNNVectorFieldMapper {
         Explicit<Boolean> ignoreMalformed,
         boolean stored,
         boolean hasDocValues,
-        OriginalMappingParameters originalMappingParameters
-        // boolean isDerivedSourceEnabled
-    ) {
+        OriginalMappingParameters originalMappingParameters,
+        Version indexCreatedVersion) {
 
         KNNMethodContext knnMethodContext = originalMappingParameters.getResolvedKnnMethodContext();
         QuantizationConfig quantizationConfig = knnMethodContext.getKnnEngine()
@@ -94,7 +93,8 @@ public class MethodFieldMapper extends KNNVectorFieldMapper {
                 public Version getIndexCreatedVersion() {
                     return knnMethodConfigContext.getVersionCreated();
                 }
-            }
+            },
+            indexCreatedVersion
         );
         return new MethodFieldMapper(
             simpleName,
