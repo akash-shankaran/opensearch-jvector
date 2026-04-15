@@ -25,6 +25,9 @@ public class KNNFloatVectorValues extends KNNVectorValues<float[]> {
     @Override
     public float[] getVector() throws IOException {
         final float[] vector = VectorValueExtractorStrategy.extractFloatVector(vectorValuesIterator);
+        if (vector == null) {
+            return null;
+        }
         this.dimension = vector.length;
         this.bytesPerVector = vector.length * 4;
         return vector;

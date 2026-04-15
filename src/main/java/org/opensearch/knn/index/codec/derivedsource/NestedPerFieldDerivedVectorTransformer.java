@@ -38,8 +38,19 @@ public class NestedPerFieldDerivedVectorTransformer extends AbstractPerFieldDeri
         }
 
         try {
-            Object vector = formatVector(childFieldInfo, vectorValues::getVector, vectorValues::conditionalCloneVector);
-            vectorValues.nextDoc();
+            // Get the vector at the current position
+            Object rawVector = vectorValues.getVector();
+            if (rawVector == null) {
+                // No vector at this position, return null
+                return null;
+            }
+
+            // Format the vector (handles byte[] deserialization if needed)
+            Object vector = formatVector(childFieldInfo, () -> rawVector, vectorValues::conditionalCloneVector);
+
+            // After getting the vector, advance to the next one for the next apply() call
+            docId = vectorValues.nextDoc();
+
             return vector;
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -53,6 +64,8 @@ public class NestedPerFieldDerivedVectorTransformer extends AbstractPerFieldDeri
             derivedSourceReaders.getDocValuesProducer(),
             derivedSourceReaders.getKnnVectorsReader()
         );
+        // Advance to the offset position (first child of parent doc)
+        // This positions the iterator at the first vector we want to read
         this.docId = vectorValues.advance(offset);
     }
 }

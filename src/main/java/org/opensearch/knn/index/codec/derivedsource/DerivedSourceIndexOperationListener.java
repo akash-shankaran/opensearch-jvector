@@ -106,13 +106,15 @@ public class DerivedSourceIndexOperationListener implements IndexingOperationLis
             for (Iterator<IndexableField> it = document.iterator(); it.hasNext();) {
                 IndexableField indexableField = it.next();
                 if (indexableField instanceof DerivedKnnFloatVectorField knnVectorFieldType && knnVectorFieldType.isDerivedEnabled()) {
-                    injectedVectors.computeIfAbsent(indexableField.name(), k -> new ArrayList<>())
-                        .add(formatVector(VectorDataType.FLOAT, knnVectorFieldType.vectorValue()));
+                    Object vector = formatVector(VectorDataType.FLOAT, knnVectorFieldType.vectorValue());
+                    injectedVectors.computeIfAbsent(indexableField.name(), k -> new ArrayList<>()).add(vector);
+                    log.debug("Collected vector for field {}: {}", indexableField.name(), vector);
                 }
 
                 if (indexableField instanceof DerivedKnnByteVectorField knnByteVectorField && knnByteVectorField.isDerivedEnabled()) {
-                    injectedVectors.computeIfAbsent(indexableField.name(), k -> new ArrayList<>())
-                        .add(formatVector(VectorDataType.BYTE, knnByteVectorField.vectorValue()));
+                    Object vector = formatVector(VectorDataType.BYTE, knnByteVectorField.vectorValue());
+                    injectedVectors.computeIfAbsent(indexableField.name(), k -> new ArrayList<>()).add(vector);
+                    log.debug("Collected vector for field {}: {}", indexableField.name(), vector);
                 }
             }
         }
@@ -120,6 +122,8 @@ public class DerivedSourceIndexOperationListener implements IndexingOperationLis
         if (injectedVectors.isEmpty()) {
             return null;
         }
+
+        log.debug("Total vectors collected: {}", injectedVectors);
 
         Map<String, Function<Object, Object>> injectTransformers = new HashMap<>();
         Map<String, Function<Object, Object>> maskTransformers = new HashMap<>();

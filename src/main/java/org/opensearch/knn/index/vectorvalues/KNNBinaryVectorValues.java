@@ -27,6 +27,9 @@ public class KNNBinaryVectorValues extends KNNVectorValues<byte[]> {
     @Override
     public byte[] getVector() throws IOException {
         final byte[] vector = VectorValueExtractorStrategy.extractBinaryVector(vectorValuesIterator);
+        if (vector == null) {
+            return null;
+        }
         this.dimension = vector.length * Byte.SIZE;
         this.bytesPerVector = vector.length;
         return vector;
