@@ -1116,10 +1116,13 @@ public class JVectorWriter extends KnnVectorsWriter {
                 // used to create the leadingCompressor
                 // We assume the leading reader is ALWAYS the first one in the readers array
                 for (int i = LEADING_READER_IDX + 1; i < readers.length; i++) {
-                    if (readers[i] == null || readers[i].getFloatVectorValues(fieldName) == null) {
+                    if (readers[i] == null) {
                         continue;
                     }
                     final FloatVectorValues values = readers[i].getFloatVectorValues(fieldName);
+                    if (values == null || values.size() == 0) {
+                        continue;
+                    }
                     final RandomAccessVectorValues randomAccessVectorValues = new RandomAccessVectorValuesOverVectorValues(values);
                     leadingCompressor.refine(randomAccessVectorValues);
                 }
