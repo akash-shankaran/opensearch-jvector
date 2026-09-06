@@ -52,7 +52,7 @@ public class KNNVectorFieldMapperTests extends KNNTestCase {
     private static final String DIMENSION_FIELD_NAME = "dimension";
     private static final String TEST_INDEX_NAME = "test-index-name";
     private static final String TEST_FIELD_NAME = "test-field-name";
-    private static final Version SKIP_BINARY_DOC_VALUES_FOR_JVECTOR_VERSION = Version.V_3_9_0;
+    private static final Version SKIP_BINARY_DOC_VALUES_VERSION = Version.V_3_9_0;
 
     public void testBuilder_getParameters() {
         KNNVectorFieldMapper.Builder builder = new KNNVectorFieldMapper.Builder(TEST_FIELD_NAME, CURRENT, null, null);
@@ -129,26 +129,8 @@ public class KNNVectorFieldMapperTests extends KNNTestCase {
         );
     }
 
-    /**
-     * jVector keeps full-precision vectors inline in the graph and serves them via
-     * {@code JVectorReader#getFloatVectorValues}, so the extra binary doc values copy is never read. Only indices created
-     * on or after the cutoff may skip it — older ones already recorded the field as BINARY and should be unchanged.
-     */
-    public void testShouldWriteBinaryDocValues_jvectorSkipsOnlyForNewIndices() {
-        Version preCutoff = Version.V_3_8_0;
-        Version cutoff = SKIP_BINARY_DOC_VALUES_FOR_JVECTOR_VERSION;
-
-        assertFalse(LuceneFieldMapper.shouldWriteBinaryDocValues(KNNEngine.JVECTOR, cutoff));
-        assertTrue(LuceneFieldMapper.shouldWriteBinaryDocValues(KNNEngine.JVECTOR, preCutoff));
-        assertTrue(LuceneFieldMapper.shouldWriteBinaryDocValues(KNNEngine.JVECTOR, Version.V_2_17_0));
-
-        // Engine scoping: every other engine keeps binary doc values regardless of version.
-        assertTrue(LuceneFieldMapper.shouldWriteBinaryDocValues(KNNEngine.LUCENE, cutoff));
-        assertTrue(LuceneFieldMapper.shouldWriteBinaryDocValues(KNNEngine.LUCENE, preCutoff));
-    }
-
     public void testLuceneFieldMapper_jvector_newIndex_doesNotWriteBinaryDocValues() throws IOException {
-        KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.JVECTOR, DISK_ANN, SKIP_BINARY_DOC_VALUES_FOR_JVECTOR_VERSION);
+        KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.JVECTOR, DISK_ANN, SKIP_BINARY_DOC_VALUES_VERSION);
         assertTrue(mapper instanceof LuceneFieldMapper);
 
         List<Field> fields = mapper.getFieldsForFloatVector(new float[TEST_DIMENSION], false);
@@ -174,16 +156,50 @@ public class KNNVectorFieldMapperTests extends KNNTestCase {
     }
 
     /**
-     * Guards the narrow scope of the jVector change: the Lucene engine shares {@link LuceneFieldMapper} and must keep
-     * writing binary doc values at any index version.
+     * The narrowed default is scoped to jVector. The Lucene engine shares {@link LuceneFieldMapper} but keeps its binary doc
+     * values at every index version.
      */
     public void testLuceneFieldMapper_lucene_stillWritesBinaryDocValues() throws IOException {
-        KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.LUCENE, METHOD_HNSW, SKIP_BINARY_DOC_VALUES_FOR_JVECTOR_VERSION);
-        assertTrue(mapper instanceof LuceneFieldMapper);
+        for (Version version : List.of(SKIP_BINARY_DOC_VALUES_VERSION, Version.V_3_8_0)) {
+            KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.LUCENE, METHOD_HNSW, version);
+            assertTrue(
+                "Lucene engine must keep binary doc values on an index created at " + version,
+                mapper.getFieldsForFloatVector(new float[TEST_DIMENSION], false)
+                    .stream()
+                    .anyMatch(field -> field.fieldType().docValuesType() == DocValuesType.BINARY)
+            );
+        }
+    }
 
-        List<Field> fields = mapper.getFieldsForFloatVector(new float[TEST_DIMENSION], false);
+    /**
+     * An explicit {@code doc_values: false} differs from the default, so it stays configured, survives the narrowing in
+     * {@code build()}, and keeps round-tripping through {@code _mapping}.
+     */
+    public void testLuceneFieldMapper_explicitDocValuesFalse_isPreserved() throws IOException {
+        KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.JVECTOR, DISK_ANN, Version.V_3_8_0, Boolean.FALSE);
 
-        assertTrue(fields.stream().anyMatch(field -> field.fieldType().docValuesType() == DocValuesType.BINARY));
+        assertTrue(
+            mapper.getFieldsForFloatVector(new float[TEST_DIMENSION], false)
+                .stream()
+                .noneMatch(field -> field.fieldType().docValuesType() == DocValuesType.BINARY)
+        );
+    }
+
+    /**
+     * Pins a known limitation of narrowing the default in {@code build()}, after the mapping has been parsed: an explicit
+     * {@code doc_values: true} on a new jVector index is not honored. {@code Parameter#isConfigured} only reports a value
+     * that differs from the default, so at that point an explicit true is indistinguishable from the default true. Nothing
+     * is functionally lost -- {@link KNNVectorFieldType} still reports {@code hasDocValues() == true} and the vectors are
+     * still served from the graph.
+     */
+    public void testLuceneFieldMapper_jvector_explicitDocValuesTrue_isStillNarrowed() throws IOException {
+        KNNVectorFieldMapper mapper = buildLuceneBackedMapper(KNNEngine.JVECTOR, DISK_ANN, SKIP_BINARY_DOC_VALUES_VERSION, Boolean.TRUE);
+
+        assertTrue(
+            mapper.getFieldsForFloatVector(new float[TEST_DIMENSION], false)
+                .stream()
+                .noneMatch(field -> field.fieldType().docValuesType() == DocValuesType.BINARY)
+        );
     }
 
     private KNNVectorFieldMapper buildLuceneBackedMapper(
@@ -191,11 +207,23 @@ public class KNNVectorFieldMapperTests extends KNNTestCase {
         final String methodName,
         final Version indexCreatedVersion
     ) throws IOException {
+        return buildLuceneBackedMapper(knnEngine, methodName, indexCreatedVersion, null);
+    }
+
+    private KNNVectorFieldMapper buildLuceneBackedMapper(
+        final KNNEngine knnEngine,
+        final String methodName,
+        final Version indexCreatedVersion,
+        final Boolean explicitDocValues
+    ) throws IOException {
         XContentBuilder xContentBuilder = XContentFactory.jsonBuilder()
             .startObject()
             .field(TYPE_FIELD_NAME, KNN_VECTOR_TYPE)
-            .field(DIMENSION_FIELD_NAME, TEST_DIMENSION)
-            .startObject(KNN_METHOD)
+            .field(DIMENSION_FIELD_NAME, TEST_DIMENSION);
+        if (explicitDocValues != null) {
+            xContentBuilder.field("doc_values", explicitDocValues.booleanValue());
+        }
+        xContentBuilder = xContentBuilder.startObject(KNN_METHOD)
             .field(NAME, methodName)
             .field(KNN_ENGINE, knnEngine.getName())
             .field(METHOD_PARAMETER_SPACE_TYPE, SpaceType.L2.getValue())
